@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
@@ -12,13 +13,27 @@ func main() {
 	// se a mensagem foi entregue ou não
 	deliveryChan := make(chan kafka.Event)
 
-
 	producer := NewKafkaProducer()
 
-	Publish("Mensagem teste", "teste", producer, nil)
+	// usando go routines
+	Publish("Mensagem teste", "teste", producer, nil, deliveryChan)
+
+	go DeliveryReport(deliveryChan)
+
+	// forma síncrona de resolver
+	// e := <- deliveryChan
+	// msg := e.(*kafka.Message)
+	// if msg.TopicPartition.Error != nil {
+	// 	fmt.Println("Erro ao enviar mensagem")
+	// } else {
+	// 	fmt.Println("Mensagem enviada:", msg.TopicPartition)
+	// }
+
 	// a aplicação desliga antes de terminar o envio
 	producer.Flush(5000)
 }
+
+
 
 // Apenas cria o producer
 func NewKafkaProducer() *kafka.Producer {
@@ -37,7 +52,7 @@ func NewKafkaProducer() *kafka.Producer {
 
 
 // Função de publicação de mensagens usando o producer
-func Publish(msg string, topic string, producer *kafka.Producer, key []byte) error {
+func Publish(msg string, topic string, producer *kafka.Producer, key []byte, deliveryChan chan kafka.Event) error {
 	// monta a struct do kafka para enviar a mensagem
 	message := &kafka.Message{
 		Value: []byte(msg), // pode enviar qualquer tipo de informação
@@ -45,10 +60,26 @@ func Publish(msg string, topic string, producer *kafka.Producer, key []byte) err
 		Key: key,
 	}
 
-	err := producer.Produce(message, nil)
+	err := producer.Produce(message, deliveryChan) // o resultado dessa mensagem é publicada no canal
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+
+// função com looping infinito para pegar o retorno do canal
+func DeliveryReport(deliveryChan chan kafka.Event) {
+	for e := range deliveryChan {
+		switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					fmt.Println("Erro ao enviar mensagem")
+				} else {
+					fmt.Println("Mensagem enviada:", ev.TopicPartition)
+					// Pode ser criado algo
+				}
+		}
+	}
 }
