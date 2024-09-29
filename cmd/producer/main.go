@@ -16,7 +16,7 @@ func main() {
 	producer := NewKafkaProducer()
 
 	// usando go routines
-	Publish("Mensagem teste", "teste", producer, nil, deliveryChan)
+	Publish("Mensagem transferida", "teste", producer, []byte("transferencia"), deliveryChan) // se não definir a key, as mensagens serão enviadas em partições diferentes, não garantindo a ordem
 
 	go DeliveryReport(deliveryChan)
 
@@ -39,7 +39,11 @@ func main() {
 func NewKafkaProducer() *kafka.Producer {
 	configMap := &kafka.ConfigMap{
 		"bootstrap.servers": "go_kafka-kafka-1:9092",
+		"delivery.timeout.ms": "0", // tempo máximo de envio
+		"acks": "1", // 0, 1 ou all | 0 nção preciso receber retorno, 1 o lider recebe a mensagem, all todos recebem mensagem de retorno
+		"enable.idempotence": "false",
 	}
+	// a idempotencia precisa que o acknoledgement seja all
 
 	producer, err := kafka.NewProducer(configMap)
 	if err != nil {
